@@ -14,7 +14,7 @@ int list_is_in_by_pid(node_t *head, int pid) {
     return 0;
 }
 
-// Add ascending by block size (Best Fit)
+// Add ascending by block size (Best Fit) with correct +1 size calculation
 void list_add_ascending_by_blocksize(node_t **head, block_t *blk) {
     node_t *new_node = (node_t *)malloc(sizeof(node_t));
     new_node->blk = blk;
@@ -22,21 +22,21 @@ void list_add_ascending_by_blocksize(node_t **head, block_t *blk) {
 
     int new_size = blk->end - blk->start + 1;
 
-    if (*head == NULL || ((*head)->blk->end - (*head)->blk->start) >= new_size) {
+    if (*head == NULL || ((*head)->blk->end - (*head)->blk->start + 1) >= new_size) {
         new_node->next = *head;
         *head = new_node;
         return;
     }
 
     node_t *current = *head;
-    while (current->next != NULL && (current->next->blk->end - current->next->blk->start) < new_size) {
+    while (current->next != NULL && (current->next->blk->end - current->next->blk->start + 1) < new_size) {
         current = current->next;
     }
     new_node->next = current->next;
     current->next = new_node;
 }
 
-// Add descending by block size (Worst Fit)
+// Add descending by block size (Worst Fit) with correct +1 size calculation
 void list_add_descending_by_blocksize(node_t **head, block_t *blk) {
     node_t *new_node = (node_t *)malloc(sizeof(node_t));
     new_node->blk = blk;
@@ -44,21 +44,58 @@ void list_add_descending_by_blocksize(node_t **head, block_t *blk) {
 
     int new_size = blk->end - blk->start + 1;
 
-    if (*head == NULL || ((*head)->blk->end - (*head)->blk->start) <= new_size) {
+    if (*head == NULL || ((*head)->blk->end - (*head)->blk->start + 1) <= new_size) {
         new_node->next = *head;
         *head = new_node;
         return;
     }
 
     node_t *current = *head;
-    while (current->next != NULL && (current->next->blk->end - current->next->blk->start) > new_size) {
+    while (current->next != NULL && (current->next->blk->end - current->next->blk->start + 1) > new_size) {
         current = current->next;
     }
     new_node->next = current->next;
     current->next = new_node;
 }
 
-// Coalesce physically adjacent nodes
+// Add ascending by address
+void list_add_ascending_by_address(node_t **head, block_t *blk) {
+    node_t *new_node = (node_t *)malloc(sizeof(node_t));
+    new_node->blk = blk;
+    new_node->next = NULL;
+
+    if (*head == NULL || (*head)->blk->start > blk->start) {
+        new_node->next = *head;
+        *head = new_node;
+        return;
+    }
+
+    node_t *current = *head;
+    while (current->next != NULL && current->next->blk->start < blk->start) {
+        current = current->next;
+    }
+    new_node->next = current->next;
+    current->next = new_node;
+}
+
+// Add to back of list (FIFO / First Fit)
+void list_add_to_back(node_t **head, block_t *blk) {
+    node_t *new_node = (node_t *)malloc(sizeof(node_t));
+    new_node->blk = blk;
+    new_node->next = NULL;
+
+    if (*head == NULL) {
+        *head = new_node;
+        return;
+    }
+
+    node_t *current = *head;
+    while (current->next != NULL) {
+        current = current->next;
+    }
+    current->next = new_node;
+}
+
 // Coalesce physically adjacent nodes in a single efficient pass
 void list_coalese_nodes(node_t **head) {
     if (head == NULL || *head == NULL) return;
@@ -66,7 +103,6 @@ void list_coalese_nodes(node_t **head) {
     node_t *current = *head;
     while (current != NULL && current->next != NULL) {
         if (current->blk->end + 1 == current->next->blk->start) {
-            // Merge next block into current block
             current->blk->end = current->next->blk->end;
             current->blk->pid = 0; // Explicitly set pid to 0 as required
             
@@ -74,14 +110,26 @@ void list_coalese_nodes(node_t **head) {
             current->next = temp->next;
             free(temp->blk);
             free(temp);
-            // Do NOT restart from head; continue checking next adjacent nodes from current
         } else {
             current = current->next;
         }
     }
 }
 
-// Improved list print with proper formatting
+// Free the entire list
+void list_free(node_t *head) {
+    node_t *current = head;
+    while (current != NULL) {
+        node_t *next = current->next;
+        if (current->blk != NULL) {
+            free(current->blk);
+        }
+        free(current);
+        current = next;
+    }
+}
+
+// Print list contents
 void list_print(node_t *head) {
     node_t *current = head;
     while (current != NULL) {
@@ -90,5 +138,5 @@ void list_print(node_t *head) {
         }
         current = current->next;
     }
-    printf("\\n");
+    printf("\n");
 }

@@ -20,7 +20,7 @@ void list_add_ascending_by_blocksize(node_t **head, block_t *blk) {
     new_node->blk = blk;
     new_node->next = NULL;
 
-    int new_size = blk->end - blk->start;
+    int new_size = blk->end - blk->start + 1;
 
     if (*head == NULL || ((*head)->blk->end - (*head)->blk->start) >= new_size) {
         new_node->next = *head;
@@ -42,7 +42,7 @@ void list_add_descending_by_blocksize(node_t **head, block_t *blk) {
     new_node->blk = blk;
     new_node->next = NULL;
 
-    int new_size = blk->end - blk->start;
+    int new_size = blk->end - blk->start + 1;
 
     if (*head == NULL || ((*head)->blk->end - (*head)->blk->start) <= new_size) {
         new_node->next = *head;
@@ -59,31 +59,26 @@ void list_add_descending_by_blocksize(node_t **head, block_t *blk) {
 }
 
 // Coalesce physically adjacent nodes
-// Coalesce physically adjacent nodes
+// Coalesce physically adjacent nodes in a single efficient pass
 void list_coalese_nodes(node_t **head) {
     if (head == NULL || *head == NULL) return;
 
-    int merged;
-    do {
-        merged = 0;
-        node_t *current = *head;
-        while (current != NULL && current->next != NULL) {
-            if (current->blk->end + 1 == current->next->blk->start) {
-                // Merge next block into current block
-                current->blk->end = current->next->blk->end;
-                current->blk->pid = 0; // Explicitly set pid to 0 as required
-                
-                node_t *temp = current->next;
-                current->next = temp->next;
-                free(temp->blk);
-                free(temp);
-                
-                merged = 1; // Flag that a merge occurred, restart check
-                break;
-            }
+    node_t *current = *head;
+    while (current != NULL && current->next != NULL) {
+        if (current->blk->end + 1 == current->next->blk->start) {
+            // Merge next block into current block
+            current->blk->end = current->next->blk->end;
+            current->blk->pid = 0; // Explicitly set pid to 0 as required
+            
+            node_t *temp = current->next;
+            current->next = temp->next;
+            free(temp->blk);
+            free(temp);
+            // Do NOT restart from head; continue checking next adjacent nodes from current
+        } else {
             current = current->next;
         }
-    } while (merged);
+    }
 }
 
 // Improved list print with proper formatting

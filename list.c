@@ -1,95 +1,99 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #include "list.h"
 
-/* All ranges are inclusive: size = end - start + 1. */
-static int block_size(const block_t *blk) {
-    return blk->end - blk->start + 1;
-}
-
-list_t *list_alloc(void) {
-    list_t *list = malloc(sizeof(*list));
-    if (!list) { perror("malloc"); exit(EXIT_FAILURE); }
-    list->head = NULL;
-    return list;
-}
-
-node_t *node_alloc(block_t *blk) {
-    node_t *node = malloc(sizeof(*node));
-    if (!node) { perror("malloc"); exit(EXIT_FAILURE); }
-    node->next = NULL;
-    node->blk = blk;
-    return node;
-}
-
-void node_free(node_t *node) { free(node); }
-
-void list_free(list_t *l) {
-    if (!l) return;
-    node_t *cur = l->head;
-    while (cur) {
-        node_t *next = cur->next;
-        free(cur->blk);
-        free(cur);
-        cur = next;
-    }
-    free(l);
-}
-
-void list_print(list_t *l) {
-    node_t *current = l->head;
-    if (!current) printf("list is empty\n");
-    while (current) {
-        block_t *b = current->blk;
-        printf("PID=%d START:%d END:%d", b->pid, b->start, b->end);
+// Check if PID is in list
+int list_is_in_by_pid(node_t *head, int pid) {
+    node_t *current = head;
+    while (current != NULL) {
+        if (current->blk != NULL && current->blk->pid == pid) {
+            return 1;
+        }
         current = current->next;
     }
+    return 0;
 }
 
-int list_length(list_t *l) {
-    int i = 0;
-    for (node_t *c = l->head; c; c = c->next) i++;
-    return i;
+// Add ascending by block size (Best Fit)
+void list_add_ascending_by_blocksize(node_t **head, block_t *blk) {
+    node_t *new_node = (node_t *)malloc(sizeof(node_t));
+    new_node->blk = blk;
+    new_node->next = NULL;
+
+    int new_size = blk->end - blk->start;
+
+    if (*head == NULL || ((*head)->blk->end - (*head)->blk->start) >= new_size) {
+        new_node->next = *head;
+        *head = new_node;
+        return;
+    }
+
+    node_t *current = *head;
+    while (current->next != NULL && (current->next->blk->end - current->next->blk->start) < new_size) {
+        current = current->next;
+    }
+    new_node->next = current->next;
+    current->next = new_node;
 }
 
-void list_add_to_back(list_t *l, block_t *blk) {
-    node_t *newNode = node_alloc(blk);
-    node_t **where = &l->head;
-    while (*where) where = &(*where)->next;
-    *where = newNode;
+// Add descending by block size (Worst Fit)
+void list_add_descending_by_blocksize(node_t **head, block_t *blk) {
+    node_t *new_node = (node_t *)malloc(sizeof(node_t));
+    new_node->blk = blk;
+    new_node->next = NULL;
+
+    int new_size = blk->end - blk->start;
+
+    if (*head == NULL || ((*head)->blk->end - (*head)->blk->start) <= new_size) {
+        new_node->next = *head;
+        *head = new_node;
+        return;
+    }
+
+    node_t *current = *head;
+    while (current->next != NULL && (current->next->blk->end - current->next->blk->start) > new_size) {
+        current = current->next;
+    }
+    new_node->next = current->next;
+    current->next = new_node;
 }
 
-void list_add_to_front(list_t *l, block_t *blk) {
-    node_t *newNode = node_alloc(blk);
-    newNode->next = l->head;
-    l->head = newNode;
+// Coalesce physically adjacent nodes
+// Coalesce physically adjacent nodes
+void list_coalese_nodes(node_t **head) {
+    if (head == NULL || *head == NULL) return;
+
+    int merged;
+    do {
+        merged = 0;
+        node_t *current = *head;
+        while (current != NULL && current->next != NULL) {
+            if (current->blk->end + 1 == current->next->blk->start) {
+                // Merge next block into current block
+                current->blk->end = current->next->blk->end;
+                current->blk->pid = 0; // Explicitly set pid to 0 as required
+                
+                node_t *temp = current->next;
+                current->next = temp->next;
+                free(temp->blk);
+                free(temp);
+                
+                merged = 1; // Flag that a merge occurred, restart check
+                break;
+            }
+            current = current->next;
+        }
+    } while (merged);
 }
 
-void list_add_at_index(list_t *l, block_t *blk, int index) {
-    if (index <= 0) { list_add_to_front(l, blk); return; }
-    node_t **where = &l->head;
-    for (int i = 0; i < index && *where; i++) where = &(*where)->next;
-    node_t *node = node_alloc(blk);
-    node->next = *where;
-    *where = node;
-}
-
-void list_add_ascending_by_address(list_t *l, block_t *newblk) {
-    node_t **where = &l->head;
-    while (*where && (*where)->blk->start <= newblk->start)
-        where = &(*where)->next;
-    node_t *newNode = node_alloc(newblk);
-    newNode->next = *where;
-    *where = newNode;
-}
-
-void list_add_ascending_by_blocksize(list_t *l, block_t *newblk) {
-    int size = block_size(newblk);
-    node_t **where = &l->head;
-    while (*where && block_size((*where)->blk) <= size)
-        where = &(*where)->next;
-    node_t *newNode = node_alloc(newblk);
-    newNode->next = *where;
-    *where = newNode;
+// Improved list print with proper formatting
+void list_print(node_t *head) {
+    node_t *current = head;
+    while (current != NULL) {
+        if (current->blk != NULL) {
+            printf("PID %d [%d, %d] ", current->blk->pid, current->blk->start, current->blk->end);
+        }
+        current = current->next;
+    }
+    printf("\\n");
 }
